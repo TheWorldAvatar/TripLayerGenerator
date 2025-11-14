@@ -51,7 +51,7 @@ public class TripLayerGenerator extends HttpServlet {
         String schema = queryClient.getSchema(pointIri);
 
         createLayer(schema);
-        setDataJson(tripIndicies, pointIri, tripIri, layerGroupName);
+        setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host);
     }
 
     private void createLayer(String schema) {
@@ -82,14 +82,15 @@ public class TripLayerGenerator extends HttpServlet {
                 EnvConfig.LAYERNAME, geoServerVectorSettings);
     }
 
-    private void setDataJson(List<Integer> trips, String pointIri, String tripIri, String layerGroupName) {
+    private void setDataJson(List<Integer> trips, String pointIri, String tripIri, String layerGroupName,
+            String host) {
         String viewparams = String.format("trip_iri:%s;point_iri:%s", tripIri, pointIri);
 
         String wmsPath = "/geoserver/twa/wms?service=WMS&version=1.1.0&request=GetMap&bbox=%7Bbbox-epsg-3857%7D&width=256&height=256&srs=EPSG:3857&format=application/vnd.mapbox-vector-tile";
         URIBuilder builder;
         URI wmsEndpoint;
         try {
-            builder = new URIBuilder(EnvConfig.GEOSERVER_HOST + wmsPath);
+            builder = new URIBuilder(host + wmsPath);
             builder.setParameter("layers", EnvConfig.GEOSERVER_WORKSPACE + ":" + EnvConfig.LAYERNAME);
             builder.setParameter("viewparams", viewparams);
             wmsEndpoint = builder.build();
@@ -100,7 +101,7 @@ public class TripLayerGenerator extends HttpServlet {
         URIBuilder builder2;
         URI stackEndpoint;
         try {
-            builder2 = new URIBuilder(EnvConfig.GEOSERVER_HOST);
+            builder2 = new URIBuilder(host);
             builder2.setPath("exposure-feature-info-agent/trajectory"); // harcoded
             stackEndpoint = builder2.build();
         } catch (URISyntaxException e) {

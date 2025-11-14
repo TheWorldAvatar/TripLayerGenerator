@@ -6,5 +6,4 @@ public class EnvConfig {
     public static final String DATABASE = System.getenv("DATABASE");
     public static final String SCHEMA = System.getenv("SCHEMA");
     public static final String LAYERNAME = System.getenv("LAYERNAME");
-    public static final String GEOSERVER_HOST = System.getenv("GEOSERVER_HOST");
 }
