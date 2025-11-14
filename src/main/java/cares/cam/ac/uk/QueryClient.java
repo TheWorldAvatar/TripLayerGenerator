@@ -63,11 +63,13 @@ public class QueryClient {
         JSONArray queryResult = remoteStoreClient.executeQuery(query.getQueryString());
 
         if (queryResult.isEmpty()) {
-            throw new RuntimeException("Trip must be present");
+            return null;
         } else if (queryResult.length() == 1) {
             return queryResult.getJSONObject(0).getString(tripVar.getVarName());
         } else {
-            throw new RuntimeException("more than one trip instances?");
+            String errmsg = "More than one trip instances?";
+            LOGGER.error(errmsg);
+            throw new RuntimeException(errmsg);
         }
     }
 

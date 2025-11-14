@@ -46,23 +46,41 @@ public class TripLayerGenerator extends HttpServlet {
 
         LOGGER.info("Received request for iri = <{}>", pointIri);
         String tripIri = queryClient.getTrip(pointIri);
-        List<Integer> tripIndicies = queryClient.getTripIndices(tripIri);
 
         String schema = queryClient.getSchema(pointIri);
 
-        createLayer(schema);
-        setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host);
+        if (tripIri != null) {
+            LOGGER.info("Querying trips");
+            List<Integer> tripIndicies = queryClient.getTripIndices(tripIri);
+            createLayer(schema, tripIri);
+            setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host);
+        } else {
+            createLayer(schema, tripIri);
+            setDataJson(null, pointIri, tripIri, layerGroupName, host);
+        }
     }
 
-    private void createLayer(String schema) {
+    private void createLayer(String schema, String tripIri) {
         String layerSql = null;
-        try (InputStream is = new ClassPathResource("layer.sql").getInputStream()) {
-            layerSql = IOUtils.toString(is, StandardCharsets.UTF_8).replace("[SCHEMA_PLACEHOLDER]", schema);
-        } catch (IOException e) {
-            String errmsg = "Failed to read layer.sql";
-            LOGGER.error(errmsg);
-            LOGGER.error(e.getMessage());
-            throw new RuntimeException(errmsg, e);
+
+        if (tripIri != null) {
+            try (InputStream is = new ClassPathResource("trip_layer.sql").getInputStream()) {
+                layerSql = IOUtils.toString(is, StandardCharsets.UTF_8).replace("[SCHEMA_PLACEHOLDER]", schema);
+            } catch (IOException e) {
+                String errmsg = "Failed to read trip_layer.sql";
+                LOGGER.error(errmsg);
+                LOGGER.error(e.getMessage());
+                throw new RuntimeException(errmsg, e);
+            }
+        } else {
+            try (InputStream is = new ClassPathResource("non_trip_layer.sql").getInputStream()) {
+                layerSql = IOUtils.toString(is, StandardCharsets.UTF_8).replace("[SCHEMA_PLACEHOLDER]", schema);
+            } catch (IOException e) {
+                String errmsg = "Failed to read trip_layer.sql";
+                LOGGER.error(errmsg);
+                LOGGER.error(e.getMessage());
+                throw new RuntimeException(errmsg, e);
+            }
         }
 
         GeoServerClient geoServerClient = GeoServerClient.getInstance();
@@ -72,7 +90,10 @@ public class TripLayerGenerator extends HttpServlet {
         virtualTable.setSql(layerSql);
         virtualTable.setEscapeSql(true);
         virtualTable.setName(EnvConfig.LAYERNAME);
-        virtualTable.addVirtualTableParameter("trip_iri", "", ".*");
+
+        if (tripIri != null) {
+            virtualTable.addVirtualTableParameter("trip_iri", "", ".*");
+        }
         virtualTable.addVirtualTableParameter("point_iri", "", ".*");
         virtualTable.addVirtualTableGeometry("geom", "Geometry", "4326"); // geom needs to match the sql query
         geoServerVectorSettings.setVirtualTable(virtualTable);
@@ -84,7 +105,13 @@ public class TripLayerGenerator extends HttpServlet {
 
     private void setDataJson(List<Integer> trips, String pointIri, String tripIri, String layerGroupName,
             String host) {
-        String viewparams = String.format("trip_iri:%s;point_iri:%s", tripIri, pointIri);
+
+        String viewparams;
+        if (tripIri != null) {
+            viewparams = String.format("trip_iri:%s;point_iri:%s", tripIri, pointIri);
+        } else {
+            viewparams = String.format("point_iri:%s", pointIri);
+        }
 
         String wmsPath = "/geoserver/twa/wms?service=WMS&version=1.1.0&request=GetMap&bbox=%7Bbbox-epsg-3857%7D&width=256&height=256&srs=EPSG:3857&format=application/vnd.mapbox-vector-tile";
         URIBuilder builder;
@@ -126,31 +153,46 @@ public class TripLayerGenerator extends HttpServlet {
         layout.put("visibility", "none");
         group.put("layers", layers);
 
-        for (int tripIndex : trips) {
-            JSONObject layer = new JSONObject();
-            layer.put("id", "trip" + String.valueOf(tripIndex));
-            if (tripIndex == 0) {
-                layer.put("name", "Stays");
-            } else {
-                layer.put("name", "Trip " + String.valueOf(tripIndex));
-            }
+        if (trips != null) {
+            for (int tripIndex : trips) {
+                JSONObject layer = new JSONObject();
+                layer.put("id", "trip" + String.valueOf(tripIndex));
+                if (tripIndex == 0) {
+                    layer.put("name", "Stays");
+                } else {
+                    layer.put("name", "Trip " + String.valueOf(tripIndex));
+                }
 
+                layer.put("source", "trajectory-source");
+                layer.put("source-layer", EnvConfig.LAYERNAME);
+                layer.put("type", "line");
+                layer.put("layout", layout);
+
+                JSONArray filter = new JSONArray();
+                filter.put("==").put(new JSONArray().put("get").put("trip")).put(tripIndex); // needs to be in sync with
+                                                                                             // layer.sql
+                layer.put("filter", filter);
+
+                JSONObject paint = new JSONObject();
+                if (tripIndex == 0) {
+                    paint.put("line-color", "black");
+                } else {
+                    paint.put("line-color", "blue");
+                }
+                layer.put("paint", paint);
+                layers.put(layer);
+            }
+        } else {
+            JSONObject layer = new JSONObject();
+            layer.put("id", "trajectory-layer");
+            layer.put("name", "Entire trajectory");
             layer.put("source", "trajectory-source");
             layer.put("source-layer", EnvConfig.LAYERNAME);
             layer.put("type", "line");
             layer.put("layout", layout);
 
-            JSONArray filter = new JSONArray();
-            filter.put("==").put(new JSONArray().put("get").put("trip")).put(tripIndex); // needs to be in sync with
-                                                                                         // layer.sql
-            layer.put("filter", filter);
-
             JSONObject paint = new JSONObject();
-            if (tripIndex == 0) {
-                paint.put("line-color", "black");
-            } else {
-                paint.put("line-color", "blue");
-            }
+            paint.put("line-color", "black");
             layer.put("paint", paint);
             layers.put(layer);
         }
@@ -166,6 +208,7 @@ public class TripLayerGenerator extends HttpServlet {
 
         for (int i = 0; i < existingGroups.length(); i++) {
             if (existingGroups.getJSONObject(i).getString("name").contentEquals(layerGroupName)) {
+                LOGGER.info("Detected existing layer group, replacing");
                 existingGroups.remove(i);
             }
         }
