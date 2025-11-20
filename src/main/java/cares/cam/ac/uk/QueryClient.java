@@ -19,7 +19,6 @@ import com.cmclinnovations.stack.clients.rdf4j.Rdf4jClient;
 
 import uk.ac.cam.cares.jps.base.query.RemoteStoreClient;
 import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 public class QueryClient {
     private static final Logger LOGGER = LogManager.getLogger(QueryClient.class);

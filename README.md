@@ -21,3 +21,24 @@ POST to "/" with parameters
 ```bash
 curl -X POST http://localhost:3838/trip-layer-generator/?iri=http://trajectory&layerGroupName=Trajectory&host=http://localhost:3838
 ```
+
+This command assumes that <http://localhost:3838/trip-layer-generator> is the base URL of the container, which depends on the configuration used to spin this container up, <https://github.com/TheWorldAvatar/hd4-stack/tree/main/stack-manager/inputs/config/services/trip-layer-generator.json> shows an example of the config file.
+
+## Building and debugging
+
+To build, populate ./docker/credentials/ with
+
+- repo_password.txt
+- repo_username.txt
+
+containing your GitHub credentials, then run
+
+```bash
+docker compose build
+```
+
+To push the image to the repository:
+
+```bash
+docker compose push
+```
