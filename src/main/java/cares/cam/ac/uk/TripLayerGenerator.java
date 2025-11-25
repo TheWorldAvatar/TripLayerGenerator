@@ -39,9 +39,22 @@ public class TripLayerGenerator extends HttpServlet {
         String layerGroupName = req.getParameter("layerGroupName");
         String pointIri = req.getParameter("iri");
         String host = req.getParameter("host");
+        String layerName = req.getParameter("layerName");
 
         if (host == null) {
             host = "http://localhost:3838";
+        }
+
+        if (layerGroupName == null) {
+            throw new RuntimeException("layerGroupName must be provided");
+        }
+
+        if (pointIri == null) {
+            throw new RuntimeException("pointIri must be provided");
+        }
+
+        if (layerName == null) {
+            throw new RuntimeException("layerName must be provided");
         }
 
         LOGGER.info("Received request for iri = <{}>", pointIri);
@@ -52,15 +65,15 @@ public class TripLayerGenerator extends HttpServlet {
         if (tripIri != null) {
             LOGGER.info("Querying trips");
             List<Integer> tripIndicies = queryClient.getTripIndices(tripIri);
-            createLayer(schema, tripIri);
-            setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host);
+            createLayer(schema, tripIri, layerName);
+            setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host, layerName);
         } else {
-            createLayer(schema, tripIri);
-            setDataJson(null, pointIri, tripIri, layerGroupName, host);
+            createLayer(schema, tripIri, layerName);
+            setDataJson(null, pointIri, tripIri, layerGroupName, host, layerName);
         }
     }
 
-    private void createLayer(String schema, String tripIri) {
+    private void createLayer(String schema, String tripIri, String layerName) {
         String layerSql = null;
 
         if (tripIri != null) {
@@ -89,7 +102,7 @@ public class TripLayerGenerator extends HttpServlet {
         GeoServerVectorSettings geoServerVectorSettings = new GeoServerVectorSettings();
         virtualTable.setSql(layerSql);
         virtualTable.setEscapeSql(true);
-        virtualTable.setName(EnvConfig.LAYERNAME);
+        virtualTable.setName(layerName);
 
         if (tripIri != null) {
             virtualTable.addVirtualTableParameter("trip_iri", "", ".*");
@@ -100,11 +113,11 @@ public class TripLayerGenerator extends HttpServlet {
         geoServerClient.createPostGISDataStore(EnvConfig.GEOSERVER_WORKSPACE, "trajectory", EnvConfig.DATABASE,
                 EnvConfig.SCHEMA);
         geoServerClient.createPostGISLayer(EnvConfig.GEOSERVER_WORKSPACE, EnvConfig.DATABASE, EnvConfig.SCHEMA,
-                EnvConfig.LAYERNAME, geoServerVectorSettings);
+                layerName, geoServerVectorSettings);
     }
 
     private void setDataJson(List<Integer> trips, String pointIri, String tripIri, String layerGroupName,
-            String host) {
+            String host, String layerName) {
 
         String viewparams;
         if (tripIri != null) {
@@ -118,7 +131,7 @@ public class TripLayerGenerator extends HttpServlet {
         URI wmsEndpoint;
         try {
             builder = new URIBuilder(host + wmsPath);
-            builder.setParameter("layers", EnvConfig.GEOSERVER_WORKSPACE + ":" + EnvConfig.LAYERNAME);
+            builder.setParameter("layers", EnvConfig.GEOSERVER_WORKSPACE + ":" + layerName);
             builder.setParameter("viewparams", viewparams);
             wmsEndpoint = builder.build();
         } catch (URISyntaxException e) {
@@ -164,7 +177,7 @@ public class TripLayerGenerator extends HttpServlet {
                 }
 
                 layer.put("source", "trajectory-source");
-                layer.put("source-layer", EnvConfig.LAYERNAME);
+                layer.put("source-layer", layerName);
                 layer.put("type", "line");
                 layer.put("layout", layout);
 
@@ -187,7 +200,7 @@ public class TripLayerGenerator extends HttpServlet {
             layer.put("id", "trajectory-layer");
             layer.put("name", "Entire trajectory");
             layer.put("source", "trajectory-source");
-            layer.put("source-layer", EnvConfig.LAYERNAME);
+            layer.put("source-layer", layerName);
             layer.put("type", "line");
             layer.put("layout", layout);
 
