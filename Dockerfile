@@ -1,77 +1,51 @@
-# syntax=docker/dockerfile:1
+# First stage: download the Java dependencies (allows them to be cached if unchanged)
+#==================================================================================================
+FROM maven:3.9-eclipse-temurin-17 AS retriever
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
+# Copy in Maven settings templates and credentials 
+COPY docker/credentials /root/credentials
+COPY docker/.m2 /root/.m2
 
-# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
+# Populate settings templates with credentials
+WORKDIR /root/.m2
+# (Note that | rather than / is used as the sed delimiter, since encrypted passwords can contain the latter, but not the former
+RUN sed -i "s|MASTER_PASSWORD|$(mvn --encrypt-master-password master_password)|" settings-security.xml
+RUN sed -i "s|REPO_USERNAME|$(cat ../credentials/repo_username.txt)|;s|REPO_PASSWORD|$(cat ../credentials/repo_password.txt|xargs mvn --encrypt-password)|" settings.xml
 
-################################################################################
+# Copy in Java source and build jar
+WORKDIR /root/code
 
-# Create a stage for resolving and downloading dependencies.
-FROM eclipse-temurin:21-jdk-jammy as deps
+COPY pom.xml ./pom.xml
+RUN --mount=type=cache,id=aermod-mvn,target=/root/.m2/repository,sharing=locked mvn clean dependency:resolve
 
-WORKDIR /build
+#==================================================================================================
 
-# Copy the mvnw wrapper with executable permissions.
-COPY --chmod=0755 mvnw mvnw
-COPY .mvn/ .mvn/
+# Second stage: build war file
+#==================================================================================================
 
-# Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.m2 so that subsequent builds don't have to
-# re-download packages.
-RUN --mount=type=bind,source=pom.xml,target=pom.xml \
-    --mount=type=cache,target=/root/.m2 ./mvnw dependency:go-offline -DskipTests
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
-################################################################################
+COPY --from=retriever /root/.m2 /root/.m2
 
-# Create a stage for building the application based on the stage with downloaded dependencies.
-# This Dockerfile is optimized for Java applications that output an uber jar, which includes
-# all the dependencies needed to run your app inside a JVM. If your app doesn't output an uber
-# jar and instead relies on an application server like Apache Tomcat, you'll need to update this
-# stage with the correct filename of your package and update the base image of the "final" stage
-# use the relevant app server, e.g., using tomcat (https://hub.docker.com/_/tomcat/) as a base image.
-FROM deps as package
+# Copy in Java source and build war
+WORKDIR /root/code
 
-WORKDIR /build
+COPY pom.xml ./
+COPY src ./src/
+COPY WEB-INF ./WEB-INF/
 
-COPY . src/
-RUN --mount=type=bind,source=pom.xml,target=pom.xml \
-    --mount=type=cache,target=/root/.m2 \
-    ./mvnw package -DskipTests && \
-    mv target/$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout).jar target/app.jar
+RUN --mount=type=cache,id=aermod-mvn,target=/root/.m2/repository,sharing=locked mvn package -DskipTests -U -P prod-profile
 
+#==================================================================================================
 
-################################################################################
+# Third stage: copy the downloaded dependency into a new image and build into an app
+#==================================================================================================
+FROM tomcat:9 AS agent
 
-# Create a new stage for running the application that contains the minimal
-# runtime dependencies for the application. This often uses a different base
-# image from the install or build stage where the necessary files are copied
-# from the install stage.
-#
-# The example below uses eclipse-turmin's JRE image as the foundation for running the app.
-# By specifying the "21-jre-jammy" tag, it will also use whatever happens to be the
-# most recent version of that tag when you build your Dockerfile.
-# If reproducibility is important, consider using a specific digest SHA, like
-# eclipse-temurin@sha256:99cede493dfd88720b610eb8077c8688d3cca50003d76d1d539b0efc8cca72b4.
-FROM eclipse-temurin:21-jre-jammy AS final
+WORKDIR /app
 
-# Create a non-privileged user that the app will run under.
-# See https://docs.docker.com/go/dockerfile-user-best-practices/
-ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
-USER appuser
+# Copy the compiled jar from the builder
+COPY --from=builder /root/code/output/* $CATALINA_HOME/webapps/
+COPY ./docker/entrypoint.sh entrypoint.sh
 
-# Copy the executable from the "package" stage.
-COPY --from=package build/target/app.jar app.jar
-
-EXPOSE 5000
-
-ENTRYPOINT [ "java", "-jar", "app.jar" ]
+ENTRYPOINT ["./entrypoint.sh"]

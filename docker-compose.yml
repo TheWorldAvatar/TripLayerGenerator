@@ -1,0 +1,4 @@
+services:
+  trip-layer-generator:
+    image: ghcr.io/theworldavatar/trip-layer-generator:1.0.0
+    build: .
