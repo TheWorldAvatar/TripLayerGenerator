@@ -2,6 +2,7 @@ package cares.cam.ac.uk;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -35,7 +36,7 @@ public class TripLayerGenerator extends HttpServlet {
     QueryClient queryClient;
 
     @Override
-    public void doPost(HttpServletRequest req, HttpServletResponse resp) {
+    public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String layerGroupName = req.getParameter("layerGroupName");
         String pointIri = req.getParameter("iri");
         String host = req.getParameter("host");
@@ -84,6 +85,10 @@ public class TripLayerGenerator extends HttpServlet {
             createLayer(schema, tripIri, layerName);
             setDataJson(null, pointIri, tripIri, layerGroupName, host, layerName, colour, width);
         }
+
+        resp.setContentType("text/html");
+        PrintWriter out = resp.getWriter();
+        out.print("Layers generated");
     }
 
     private void createLayer(String schema, String tripIri, String layerName) {
