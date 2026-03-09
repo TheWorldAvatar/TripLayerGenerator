@@ -24,7 +24,7 @@ POST to "/" with parameters
 - iri: IRI of the instance containing point time series
 - layerGroupName: Name of the layer group for visualisation (user facing)
 - host: External facing host of the stack, used to construct WMS endpoint and feature info agent query
-- layerName: Layer name in GeoServer (internal in GeoServer), specify a different name for different trajectories to avoid overwriting existing layers
+- layerName: Layer name in GeoServer (internal in GeoServer), recommend to have one layer for trajectories with trips and one layer for trajectories without trips.
 
 ```bash
 curl -X POST http://localhost:3838/trip-layer-generator/?iri=http://trajectory&layerGroupName=Trajectory&host=http://localhost:3838&layerName=trajectory
