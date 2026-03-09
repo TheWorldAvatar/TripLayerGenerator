@@ -21,10 +21,12 @@ Data is queryable via the stack outgoing federation endpoint <https://github.com
 
 POST to "/" with parameters
 
-- iri: IRI of the instance containing point time series
-- layerGroupName: Name of the layer group for visualisation (user facing)
-- host: External facing host of the stack, used to construct WMS endpoint and feature info agent query
-- layerName: Layer name in GeoServer (internal in GeoServer), specify a different name for different trajectories to avoid overwriting existing layers
+- `iri`: IRI of the instance containing point time series
+- `layerGroupName`: Name of the layer group for visualisation (user facing)
+- `host`: External facing host of the stack, used to construct WMS endpoint and feature info agent query
+- `layerName`: Layer name in GeoServer (internal in GeoServer), recommend to have one layer for trajectories with trips and one layer for trajectories without trips.
+- `colour`: Colour of the trajectory/trip line (optional, defaults to blue). Visits are hard-coded to black.
+- `width`: Width of the trajectory/trip line (optional, defaults to 3).
 
 ```bash
 curl -X POST http://localhost:3838/trip-layer-generator/?iri=http://trajectory&layerGroupName=Trajectory&host=http://localhost:3838&layerName=trajectory

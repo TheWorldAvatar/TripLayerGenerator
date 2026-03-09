@@ -2,6 +2,7 @@ package cares.cam.ac.uk;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -35,11 +36,13 @@ public class TripLayerGenerator extends HttpServlet {
     QueryClient queryClient;
 
     @Override
-    public void doPost(HttpServletRequest req, HttpServletResponse resp) {
+    public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String layerGroupName = req.getParameter("layerGroupName");
         String pointIri = req.getParameter("iri");
         String host = req.getParameter("host");
         String layerName = req.getParameter("layerName");
+        String colour = req.getParameter("colour");
+        String widthStr = req.getParameter("width");
 
         if (host == null) {
             host = "http://localhost:3838";
@@ -57,6 +60,17 @@ public class TripLayerGenerator extends HttpServlet {
             throw new RuntimeException("layerName must be provided");
         }
 
+        if (colour == null) {
+            colour = "blue";
+        }
+
+        int width;
+        if (widthStr == null) {
+            width = 3;
+        } else {
+            width = Integer.parseInt(widthStr);
+        }
+
         LOGGER.info("Received request for iri = <{}>", pointIri);
         String tripIri = queryClient.getTrip(pointIri);
 
@@ -66,11 +80,15 @@ public class TripLayerGenerator extends HttpServlet {
             LOGGER.info("Querying trips");
             List<Integer> tripIndicies = queryClient.getTripIndices(tripIri);
             createLayer(schema, tripIri, layerName);
-            setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host, layerName);
+            setDataJson(tripIndicies, pointIri, tripIri, layerGroupName, host, layerName, colour, width);
         } else {
             createLayer(schema, tripIri, layerName);
-            setDataJson(null, pointIri, tripIri, layerGroupName, host, layerName);
+            setDataJson(null, pointIri, tripIri, layerGroupName, host, layerName, colour, width);
         }
+
+        resp.setContentType("text/html");
+        PrintWriter out = resp.getWriter();
+        out.print("Layers generated");
     }
 
     private void createLayer(String schema, String tripIri, String layerName) {
@@ -117,7 +135,7 @@ public class TripLayerGenerator extends HttpServlet {
     }
 
     private void setDataJson(List<Integer> trips, String pointIri, String tripIri, String layerGroupName,
-            String host, String layerName) {
+            String host, String layerName, String colour, int width) {
 
         String viewparams;
         if (tripIri != null) {
@@ -190,8 +208,9 @@ public class TripLayerGenerator extends HttpServlet {
                 if (tripIndex == 0) {
                     paint.put("line-color", "black");
                 } else {
-                    paint.put("line-color", "blue");
+                    paint.put("line-color", colour);
                 }
+                paint.put("line-width", width);
                 layer.put("paint", paint);
                 layers.put(layer);
             }
@@ -205,7 +224,8 @@ public class TripLayerGenerator extends HttpServlet {
             layer.put("layout", layout);
 
             JSONObject paint = new JSONObject();
-            paint.put("line-color", "black");
+            paint.put("line-color", colour);
+            paint.put("line-width", width);
             layer.put("paint", paint);
             layers.put(layer);
         }
